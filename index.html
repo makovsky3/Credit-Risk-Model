@@ -90,6 +90,14 @@
                 <h2>Fraud Risk Indicators</h2>
                 <div id="fraudIndicators"></div>
             </div>
+            <div>
+                <h2>Qualitative Factors</h2>
+                <div id="qualitativeFactors"></div>
+            </div>
+            <div>
+                <h2>Credit History</h2>
+                <div id="creditHistory"></div>
+            </div>
         </div>
         <button onclick="calculateMetrics()">Calculate Metrics and Assess Risk</button>
         <div class="results" id="results"></div>
@@ -98,7 +106,7 @@
         </div>
     </div>
 
-   <script>
+    <script>
     const financials = {
         currentAssets: '', currentLiabilities: '', accountsReceivable: '',
         inventory: '', revenue: '', costOfGoodsSold: '', operatingExpenses: '',
@@ -108,6 +116,14 @@
         unusualTransactionPatterns: false, inconsistentFinancials: false,
         rapidRevenueGrowth: false, frequentAddressChanges: false, incompleteDocumentation: false
     };
+    const qualitativeFactors = {
+        experiencedManagement: false,
+        strongBusinessModel: false,
+        favorableIndustryConditions: false,
+        diversifiedCustomerBase: false,
+        stableSupplyChain: false
+    };
+    let creditHistoryScore = '';
     let metrics = null;
 
     function initializeInputs() {
@@ -127,11 +143,30 @@
             const div = document.createElement('div');
             div.className = 'checkbox-group';
             div.innerHTML = `
-                <input type="checkbox" id="${key}" ${value ? 'checked' : ''} onchange="handleCheckboxChange('${key}')">
+                <input type="checkbox" id="${key}" ${value ? 'checked' : ''} onchange="handleCheckboxChange('${key}', 'fraudIndicators')">
                 <label for="${key}">${key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}</label>
             `;
             fraudIndicatorsDiv.appendChild(div);
         }
+
+        const qualitativeFactorsDiv = document.getElementById('qualitativeFactors');
+        for (const [key, value] of Object.entries(qualitativeFactors)) {
+            const div = document.createElement('div');
+            div.className = 'checkbox-group';
+            div.innerHTML = `
+                <input type="checkbox" id="${key}" ${value ? 'checked' : ''} onchange="handleCheckboxChange('${key}', 'qualitativeFactors')">
+                <label for="${key}">${key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}</label>
+            `;
+            qualitativeFactorsDiv.appendChild(div);
+        }
+
+        const creditHistoryDiv = document.getElementById('creditHistory');
+        creditHistoryDiv.innerHTML = `
+            <div class="input-group">
+                <label for="creditHistoryScore">Credit History Score (1-10)</label>
+                <input type="number" id="creditHistoryScore" min="1" max="10" value="${creditHistoryScore}" oninput="handleCreditHistoryChange(event)">
+            </div>
+        `;
     }
 
     function handleInputChange(e, key) {
@@ -139,23 +174,30 @@
         financials[key] = isNaN(numericValue) ? '' : numericValue;
     }
 
-    function handleCheckboxChange(key) {
-        fraudIndicators[key] = !fraudIndicators[key];
+    function handleCheckboxChange(key, type) {
+        if (type === 'fraudIndicators') {
+            fraudIndicators[key] = !fraudIndicators[key];
+        } else if (type === 'qualitativeFactors') {
+            qualitativeFactors[key] = !qualitativeFactors[key];
+        }
+    }
+
+    function handleCreditHistoryChange(e) {
+        creditHistoryScore = Math.max(1, Math.min(10, parseInt(e.target.value) || 1));
     }
 
     function calculateFraudRiskScore() {
         let score = 0;
-        if (fraudIndicators.unusualTransactionPatterns) score += 2;
-        if (fraudIndicators.inconsistentFinancials) score += 2;
-        if (fraudIndicators.rapidRevenueGrowth) score += 1;
-        if (fraudIndicators.frequentAddressChanges) score += 1;
-        if (fraudIndicators.incompleteDocumentation) score += 1;
-        
-        // Additional financial metric checks
+        for (const indicator in fraudIndicators) {
+            if (fraudIndicators[indicator]) score += 1;
+        }
         if (metrics.daysReceivablesOutstanding > 90) score += 1;
         if (parseFloat(metrics.revenueGrowthRate) > 100) score += 1;
-        
         return score;
+    }
+
+    function calculateQualitativeScore() {
+        return Object.values(qualitativeFactors).filter(Boolean).length;
     }
 
     function calculateMetrics() {
@@ -172,6 +214,8 @@
         };
         
         metrics.fraudRiskScore = calculateFraudRiskScore();
+        metrics.qualitativeScore = calculateQualitativeScore();
+        metrics.creditHistoryScore = creditHistoryScore;
         
         displayResults();
         updateChart();
@@ -181,15 +225,40 @@
         if (!metrics) return [];
         const analysis = [];
         
-        // Existing analysis logic...
-        
-        // Fraud risk score analysis
-        if (metrics.fraudRiskScore <= 2) {
-            analysis.push({text: `Fraud Risk Score is ${metrics.fraudRiskScore} out of 9, indicating low risk.`, type: "success"});
-        } else if (metrics.fraudRiskScore <= 5) {
-            analysis.push({text: `Fraud Risk Score is ${metrics.fraudRiskScore} out of 9, indicating moderate risk. Further investigation recommended.`, type: "warning"});
+        if (metrics.currentRatio < 1) {
+            analysis.push({text: "Current Ratio is below 1, indicating potential liquidity issues.", type: "warning"});
+        } else if (metrics.currentRatio > 2) {
+            analysis.push({text: "Current Ratio is above 2, suggesting strong liquidity.", type: "success"});
+        }
+
+        if (metrics.quickRatio < 1) {
+            analysis.push({text: "Quick Ratio is below 1, suggesting potential challenges in meeting immediate obligations.", type: "warning"});
         } else {
-            analysis.push({text: `Fraud Risk Score is ${metrics.fraudRiskScore} out of 9, indicating high risk. Thorough investigation required.`, type: "danger"});
+            analysis.push({text: "Quick Ratio is 1 or above, indicating good ability to meet immediate obligations.", type: "success"});
+        }
+
+        if (metrics.daysReceivablesOutstanding > 60) {
+            analysis.push({text: "Days Receivables Outstanding is high, potentially indicating collection issues.", type: "warning"});
+        } else if (metrics.daysReceivablesOutstanding < 30) {
+            analysis.push({text: "Days Receivables Outstanding is low, suggesting efficient collection practices.", type: "success"});
+        }
+
+        if (metrics.fraudRiskScore <= 2) {
+            analysis.push({text: `Fraud Risk Score is ${metrics.fraudRiskScore} out of 7, indicating low risk.`, type: "success"});
+        } else if (metrics.fraudRiskScore <= 4) {
+            analysis.push({text: `Fraud Risk Score is ${metrics.fraudRiskScore} out of 7, indicating moderate risk. Further investigation recommended.`, type: "warning"});
+        } else {
+            analysis.push({text: `Fraud Risk Score is ${metrics.fraudRiskScore} out of 7, indicating high risk. Thorough investigation required.`, type: "danger"});
+        }
+
+        analysis.push({text: `Qualitative Score: ${metrics.qualitativeScore} out of 5 positive factors identified.`, type: metrics.qualitativeScore >= 3 ? "success" : "warning"});
+
+        if (metrics.creditHistoryScore >= 7) {
+            analysis.push({text: `Credit History Score is ${metrics.creditHistoryScore}, indicating a strong credit history.`, type: "success"});
+        } else if (metrics.creditHistoryScore >= 4) {
+            analysis.push({text: `Credit History Score is ${metrics.creditHistoryScore}, indicating a moderate credit history.`, type: "warning"});
+        } else {
+            analysis.push({text: `Credit History Score is ${metrics.creditHistoryScore}, indicating a poor credit history.`, type: "danger"});
         }
         
         return analysis;
@@ -199,11 +268,7 @@
         const resultsDiv = document.getElementById('results');
         resultsDiv.innerHTML = '<h2>Results:</h2>';
         for (const [key, value] of Object.entries(metrics)) {
-            if (key === 'fraudRiskScore') {
-                resultsDiv.innerHTML += `<p><strong>Fraud Risk Score: ${value} out of 9</strong></p>`;
-            } else {
-                resultsDiv.innerHTML += `<p>${key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}: ${value}</p>`;
-            }
+            resultsDiv.innerHTML += `<p>${key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}: ${value}</p>`;
         }
         const analysis = analyzeMetrics();
         resultsDiv.innerHTML += '<h3>Analysis:</h3>';
@@ -214,13 +279,17 @@
 
     function updateChart() {
         const ctx = document.getElementById('metricsChart').getContext('2d');
+        const chartData = Object.entries(metrics)
+            .filter(([key]) => !['fraudRiskScore', 'qualitativeScore', 'creditHistoryScore'].includes(key))
+            .map(([key, value]) => ({ name: key, value: parseFloat(value) }));
+
         new Chart(ctx, {
             type: 'bar',
             data: {
-                labels: Object.keys(metrics).filter(key => key !== 'fraudRiskScore'),
+                labels: chartData.map(item => item.name.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())),
                 datasets: [{
                     label: 'Financial Metrics',
-                    data: Object.values(metrics).filter((_, index) => Object.keys(metrics)[index] !== 'fraudRiskScore'),
+                    data: chartData.map(item => item.value),
                     backgroundColor: 'rgba(54, 162, 235, 0.5)',
                     borderColor: 'rgba(54, 162, 235, 1)',
                     borderWidth: 1
@@ -237,7 +306,6 @@
     }
 
     initializeInputs();
-</script>
-    
+    </script>
 </body>
 </html>
